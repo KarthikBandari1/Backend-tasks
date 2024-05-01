@@ -10,7 +10,7 @@ const swaggerUI = require('swagger-ui-express')
 const YAML = require('yamljs')
 const swaggerJSDocs = YAML.load('./api.yaml')
 
-const databasePath = path.join(__dirname, 'user.db')
+const databasePath = path.join(__dirname, 'database.db')
 
 const app = express()
 app.use(cors())
@@ -38,22 +38,22 @@ initializeDbAndServer()
 
 app.post('/register', async (request, response) => {
   try {
-    const {username, email, password} = request.body
+    const {username, password_hash} = request.body
 
     // Checking if user already exists
-    const selectUserQuery = 'SELECT * FROM Users WHERE Name = ?'
+    const selectUserQuery = 'SELECT * FROM Users WHERE username = ?'
     const dbUser = await database.get(selectUserQuery, [username])
 
     if (dbUser) {
       response.status(400).send('User already exists')
     } else {
       // Hashing password
-      const hashedPassword = await bcrypt.hash(password, 10)
+      const hashedPassword = await bcrypt.hash(password_hash, 10)
 
       // Inserting new user
       const createUserQuery = `
-        INSERT INTO userDetails (Name, Email, password)
-        VALUES (?, ?, ?)`
+        INSERT INTO Users (username, password_hash)
+        VALUES (?, ?)`
 
       const dbResponse = await database.run(createUserQuery, [
         username,
@@ -71,13 +71,14 @@ app.post('/register', async (request, response) => {
 
 app.post('/login', async (request, response) => {
   try {
-    const {username, password} = request.body
-    const selectUserQuery = 'SELECT * FROM Users WHERE Name = ?'
+    const {username, password_hash} = request.body
+    console.log(username,password_hash)
+    const selectUserQuery = 'SELECT * FROM Users WHERE username = ?'
     const dbUser = await database.get(selectUserQuery, [username])
     if (!dbUser) {
       response.status(400).send('Invalid User')
     } else {
-      const isPasswordMatched = await bcrypt.compare(password, dbUser.password)
+      const isPasswordMatched = await bcrypt.compare(password_hash, dbUser.password_hash)
       if (isPasswordMatched) {
         const payload = {Name: username}
         const jwtToken = jwt.sign(payload, 'MY_SECRET_TOKEN')
@@ -130,7 +131,7 @@ app.put('/changePassword', authenticateToken, async (request, response) => {
     }
 
     const newHashedPassword = await bcrypt.hash(newPassword, 10)
-    const putQuery = 'UPDATE Users SET password = ? WHERE Name = ?'
+    const putQuery = 'UPDATE Users SET password_hash = ? WHERE username = ?'
     await database.run(putQuery, [newHashedPassword, request.username])
 
     response.send('Password Updated')
@@ -140,22 +141,10 @@ app.put('/changePassword', authenticateToken, async (request, response) => {
   }
 })
 
-app.post('/login', async (req, res) => {
-  const { username, password } = req.body;
-
-  // Simulated user authentication logic - replace with your actual logic
-  if (username === 'admin' && password === 'adminpassword') {
-      const token = jwt.sign({ username: username }, SECRET_KEY);
-      res.json({ token: token });
-  } else {
-      res.status(401).json({ error: 'Unauthorized: Invalid credentials' });
-  }
-});
-
 // GET all tasks
 app.get('/tasks', authenticateToken, async (req, res) => {
   try {
-      const rows = await db.all('SELECT * FROM Tasks');
+      const rows = await database.all('SELECT * FROM Tasks');
       res.json(rows);
   } catch (err) {
       res.status(500).json({ error: err.message });
@@ -166,7 +155,7 @@ app.get('/tasks', authenticateToken, async (req, res) => {
 app.get('/tasks/:id', authenticateToken, async (req, res) => {
   const taskId = req.params.id;
   try {
-      const row = await db.get('SELECT * FROM Tasks WHERE id = ?', [taskId]);
+      const row = await database.get('SELECT * FROM Tasks WHERE id = ?', [taskId]);
       if (!row) {
           res.status(404).json({ error: 'Task not found' });
       } else {
@@ -182,7 +171,7 @@ app.post('/tasks', authenticateToken, async (req, res) => {
   const { title, description, status, assignee_id } = req.body;
   const createdAt = new Date().toISOString();
   try {
-      const result = await db.run('INSERT INTO Tasks (title, description, status, assignee_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', [title, description, status, assignee_id, createdAt, createdAt]);
+      const result = await database.run('INSERT INTO Tasks (title, description, status, assignee_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)', [title, description, status, assignee_id, createdAt, createdAt]);
       res.json({ id: result.lastID });
   } catch (err) {
       res.status(500).json({ error: err.message });
@@ -195,7 +184,7 @@ app.put('/tasks/:id', authenticateToken, async (req, res) => {
   const { title, description, status, assignee_id } = req.body;
   const updatedAt = new Date().toISOString();
   try {
-      const result = await db.run('UPDATE Tasks SET title = ?, description = ?, status = ?, assignee_id = ?, updated_at = ? WHERE id = ?', [title, description, status, assignee_id, updatedAt, taskId]);
+      const result = await database.run('UPDATE Tasks SET title = ?, description = ?, status = ?, assignee_id = ?, updated_at = ? WHERE id = ?', [title, description, status, assignee_id, updatedAt, taskId]);
       if (result.changes === 0) {
           res.status(404).json({ error: 'Task not found' });
       } else {
@@ -210,7 +199,7 @@ app.put('/tasks/:id', authenticateToken, async (req, res) => {
 app.delete('/tasks/:id', authenticateToken, async (req, res) => {
   const taskId = req.params.id;
   try {
-      const result = await db.run('DELETE FROM Tasks WHERE id = ?', [taskId]);
+      const result = await database.run('DELETE FROM Tasks WHERE id = ?', [taskId]);
       if (result.changes === 0) {
           res.status(404).json({ error: 'Task not found' });
       } else {

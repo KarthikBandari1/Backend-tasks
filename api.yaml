@@ -24,8 +24,10 @@ securityDefinitions:
 paths:
   /register:
     post:
+      tags:
+        - Users
       summary: User Registration
-      description: You need to enter the username, email and password in the request body. These details are sent to the database and stored in the userDetails table. The password is hashed using bcrypt library, before storing in the table. On successful insertion into the table, you will receive response that new user is created 
+      description: You need to enter the username and password in the request body. These details are sent to the database and stored in the Users table. The password is hashed using bcrypt library, before storing in the table. On successful insertion into the table, you will receive response that new user is created 
       produces:
         - application/json
       consumes:
@@ -37,14 +39,11 @@ paths:
             type: object
             required:
               - username
-              - email
               - password
             properties:
               username:
                 type: string
-              email:
-                type: string
-              password:
+              password_hash:
                 type: string
       responses:
         200:
@@ -54,8 +53,10 @@ paths:
 
   /login:
     post:
+      tags:
+        - Users
       summary: User Login
-      description: You need to enter the username and password in the request body. These credentials are checked with the data in userDetails table with the help of bcrypt library. If the credentials you entered are correct then you will receive JWT token.
+      description: You need to enter the username and password in the request body. These credentials are checked with the data in Users table with the help of bcrypt library. If the credentials you entered are correct then you will receive JWT token.
       produces:
         - application/json
       consumes:
@@ -67,11 +68,11 @@ paths:
             type: object
             required:
               - username
-              - password
+              - password_hash
             properties:
               username:
                 type: string
-              password:
+              password_hash:
                 type: string
       responses:
         200:
@@ -79,108 +80,10 @@ paths:
         400:
           description: Invalid Credentials
         
-
-  /logout:
-    get:
-      security:
-        - BearerAuth: []
-      summary: User Logout
-      description: The user's JWT token will be destroyed by inserting it into invalidated_tokens table in the database. On successful log out, the you receive response that user has been logged out.
-      responses:
-        200:   
-          description: User successfully logged out
-        401:
-          description: Invalid JWT token
-        500:
-          description: Internal Server Error
-  
-  /api/data:
-    get:
-      summary: Returns api data
-      description: The raw data is fetched from the "https://api.publicapis.org/entries" api and then filtered based on the query parameters of url. The query parameters are category, limit, offset, https, cors, auth. Among which including category and limit parameters is required mandatorily. On success, You will receive an array of objects. 
-      parameters:
-        - name: category
-          in: query
-          required: true
-          schema:
-            type : string
-        - name: limit
-          in: query
-          required: true
-          schema:
-            type : integer
-        - name: offset
-          in: query
-          required: false
-          schema:
-            type : integer
-        - name: https
-          in: query
-          required: false
-          schema:
-            type : boolean
-        - name: cors
-          in: query
-          required: false
-          schema:
-            type : string
-        - name: auth
-          in: query
-          required: false
-          schema:
-            type : string
-      responses:
-        200:
-          description: Success
-          schema:
-            type: array
-            items: 
-              type: object
-              properties:
-                API:
-                  type: string
-                Description:
-                  type: string
-                Auth:
-                  type: string
-                HTTPS:
-                  type: boolean
-                Cors:
-                  type: string
-                Link:
-                  type: string
-                Category:
-                  type: string
-        500:
-          description: Internal Server Error
-          
-  
-
-  /user:
-    get:
-      security:
-        - BearerAuth: []
-      summary: Returns sensitive details of a user.
-      description: This is a protected API. The JWT token from the request header will be validated and only if the token is valid,then the username will be extracted from the payload object and using this username, the entire row of the user will be fetched from the userDetails table. It uses the middleware function for the authentication. The successful response of the API contains an object of username, email and hashedpassword.
-      responses:
-        200:   
-          description: Successful Response
-          schema: 
-            type: object
-            properties:
-              Name:
-                type: string
-              email:
-                type: string
-              password:
-                type: string
-        401:
-          description: Invalid JWT token
-        500:
-          description: Internal Server Error
-
   /changePassword:
     put:
+      tags:
+        - Users
       security:
         - BearerAuth: []
       summary: Changing the password
@@ -202,10 +105,159 @@ paths:
           description: Invalid JWT token
         500:
           description: Internal Server Error
-        
-              
+    
+  /tasks:
+    get:
+      tags:
+        - Tasks
+      security:
+        - BearerAuth: []
+      summary: Get all the tasks.
+      responses:
+        200:
+          description: Success
+          schema:
+            type: array
+            items: 
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                assignee_id:
+                  type: integer
+        401:
+          description: Invalid JWT token
+        500:
+          description: Internal Server Error
+
+    post:
+      tags:
+        - Tasks
+      security:
+        - BearerAuth: []
+      summary: Create a task.
+      parameters:
+        - in: body
+          name: Task Details
+          schema:
+            type: object
+            required:
+              - title
+              - description
+              - assignee_id
+            properties:
+              title:
+                type: string
+              description:
+                type: string
+              assignee_id:
+                type: integer
+      responses:
+        200:   
+          description: Successful Response
+          schema: 
+            type: object
+            properties:
+              id:
+                type: integer
+        401:
+          description: Invalid JWT token
+        500:
+          description: Internal Server Error
+
+  /tasks/{taskId}: 
+    get:
+      tags:
+        - Tasks
+      security:
+        - BearerAuth: []
+      summary: Get a task by ID
+      operationId: getTaskById
+      parameters:
+        - name: taskId  
+          in: path       
+          description: ID of the task to retrieve
+          required: true
+          type: integer 
+          format: int64  
+      responses:
+        '200':
+          description: Successful response
+          schema:
+            type: object
+            properties:
+              id:
+                type: integer
+              title:
+                type: string
+              description:
+                type: string
+              status:
+                type: string
+              assignee_id:
+                type: integer
+              created_at:
+                type: string
+              updated_at:
+                type: string
+
+    put:
+      tags:
+        - Tasks
+      security:
+        - BearerAuth: []
+      summary: Update a task by ID
+      operationId: updateTaskById
+      parameters:
+        - name: taskId 
+          in: path      
+          description: ID of the task to update
+          required: true
+          type: integer  
+          format: int64 
+        - in: body
+          name: task
+          description: Updated task object
+          required: true
+          schema:
+            type: object
+            properties:
+              title:
+                type: string
+              description:
+                type: string
+              status:
+                type: string
+              assignee_id:
+                type: integer
+      responses:
+        '200':
+          description: Task updated successfully
+        '404':
+          description: Task not found
   
-  
+    delete:
+      tags:
+        - Tasks
+      security:
+        - BearerAuth: []
+      summary: Delete a task by ID
+      operationId: deleteTaskById
+      parameters:
+        - name: taskId 
+          in: path      
+          description: ID of the task to delete
+          required: true
+          type: integer 
+          format: int64  
+      responses:
+        '200':
+          description: Task deleted successfully
+        '404':
+          description: Task not found
+            
 
   
 
